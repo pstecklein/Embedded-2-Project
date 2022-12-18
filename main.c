@@ -53,7 +53,6 @@ void DemoSleep(u32 millis);
 PmodKYPD myKYPD;
 
 
-
 // To change between PmodOLED and OnBoardOLED is to change Orientation
 const u8 orientation = 0x0; // Set up for Normal PmodOLED(false) vs normal
                             // Onboard OLED(true)
@@ -84,132 +83,233 @@ void DemoInitialize() {
 }
 
 
-
-
 void DemoRun() {
-   // KYPD
-   u16 keystate;
-   XStatus status, last_status = KYPD_NO_KEY;
-   u8 key, last_key = 'x';
-   // Initial value of last_key cannot be contained in loaded KEYTABLE string
+	// KYPD
+	u16 keystate;
+	XStatus status, last_status = KYPD_NO_KEY;
+	u8 key, last_key = 'x';
+	// Initial value of last_key cannot be contained in loaded KEYTABLE string
 
-   // OLED
-   int top, right, bottom, left, loc;
-   u8 *pat;
+	// OLED
+	int top, right, bottom, left, loc;
+	u8 *pat;
 
+	Xil_Out32(myKYPD.GPIO_addr, 0xF);
+	Xil_Out32(myDevice.GPIO_addr, 0xAAAA);
 
-   Xil_Out32(myKYPD.GPIO_addr, 0xF);
-   Xil_Out32(myDevice.GPIO_addr, 0xAAAA);
+	top = 10;
+	right = 125;
+	bottom = 17;
+	left = 118;
 
-   xil_printf("Pmod KYPD demo started. Press any key on the Keypad.\r\n");
+	int shipTop = 5;
+	int shipRight = 10;
+	int shipBottom = 10;
+	int shipLeft = 5;
 
+	int count = 0;
 
-   top = 20;
-   right = 70;
-   bottom = 10;
-   left = 60;
+	int playing = 1;
+	int score = 0;
 
-   int shipTop = 10;
-   int shipRight = 10;
-   int shipBottom = 5;
-   int shipLeft = 5;
+   int contact() {
+	   if (left < shipRight + 6) {
+		  if ((top > shipTop - 8) && (top < shipBottom + 1)) {
+			  return 1;
+		  }
+	   }
 
-   int count = 0;
+	   return 0;
+   }
 
-
-   while (1) {
-		// Capture state of each key
-		keystate = KYPD_getKeyStates(&myKYPD);
-
-		// Determine which single key is pressed, if any
-		status = KYPD_getKeyPressed(&myKYPD, keystate, &key);
-
-		// Print key detect if a new key is pressed or if status has changed
-		if (status == KYPD_SINGLE_KEY
-			&& (status != last_status || key != last_key)) {
-		 char c = (char) key;
-		 int x = (int) c;
-		 if (x == 65) {
-			shipTop--;
-			shipBottom--;
-		 } else if (x == 66) {
-			shipTop++;
-			shipBottom++;
-		 }
-		 	 last_key = key;
-		} else if (status == KYPD_MULTI_KEY && status != last_status)
-		 xil_printf("Error: Multiple keys pressed\r\n");
-
-		last_status = status;
-
-
-		// Choosing Fill pattern 0
+   void draw_ready() {
+	   // Choosing Fill pattern 0
 		pat = OLED_GetStdPattern(0);
 		OLED_SetFillPattern(&myDevice, pat);
 		// Turn automatic updating off
 		OLED_SetCharUpdate(&myDevice, 0);
-
-
-		// Draw a rectangle in center of screen
+		// Clear and ready drawing
 		OLED_SetDrawMode(&myDevice, OledModeSet);
 		OLED_ClearBuffer(&myDevice);
+   }
 
-		pat = OLED_GetStdPattern(1);
+   void draw_ship() {
+	   pat = OLED_GetStdPattern(1);
 		OLED_SetFillPattern(&myDevice, pat);
 		OLED_MoveTo(&myDevice, shipLeft, shipBottom);
 		OLED_FillRect(&myDevice, shipRight, shipTop);
 		OLED_DrawRect(&myDevice, shipRight, shipTop);
 
 		OLED_SetFillPattern(&myDevice, pat);
-		OLED_MoveTo(&myDevice, shipLeft - 3, shipTop - 1);
+		OLED_MoveTo(&myDevice, shipLeft - 3, shipTop + 1);
 		OLED_FillRect(&myDevice, shipLeft, shipTop);
 		OLED_DrawRect(&myDevice, shipLeft, shipTop);
 
 		OLED_SetFillPattern(&myDevice, pat);
-		OLED_MoveTo(&myDevice, shipLeft - 3, shipBottom + 1);
-		OLED_FillRect(&myDevice, shipLeft, shipBottom);
-		OLED_DrawRect(&myDevice, shipLeft, shipBottom);
+		OLED_MoveTo(&myDevice, shipLeft - 3, shipBottom);
+		OLED_FillRect(&myDevice, shipLeft, shipBottom - 1);
+		OLED_DrawRect(&myDevice, shipLeft, shipBottom - 1);
 
 
 		OLED_SetFillPattern(&myDevice, pat);
-		OLED_MoveTo(&myDevice, shipRight, shipBottom + 1);
-		OLED_FillRect(&myDevice, shipRight + 3, shipTop - 1);
-		OLED_DrawRect(&myDevice, shipRight + 3, shipTop - 1);
+		OLED_MoveTo(&myDevice, shipRight, shipBottom - 1);
+		OLED_FillRect(&myDevice, shipRight + 3, shipTop + 1);
+		OLED_DrawRect(&myDevice, shipRight + 3, shipTop + 1);
 
 		OLED_SetFillPattern(&myDevice, pat);
-		OLED_MoveTo(&myDevice, shipRight + 3, shipBottom + 2);
-		OLED_FillRect(&myDevice, shipRight + 5, shipTop - 2);
-		OLED_DrawRect(&myDevice, shipRight + 5, shipTop - 2);
+		OLED_MoveTo(&myDevice, shipRight + 3, shipBottom - 2);
+		OLED_FillRect(&myDevice, shipRight + 5, shipTop + 2);
+		OLED_DrawRect(&myDevice, shipRight + 5, shipTop + 2);
+   }
 
-
+   void draw_asteroid() {
 		pat = OLED_GetStdPattern(7);
 		OLED_SetFillPattern(&myDevice, pat);
 		OLED_MoveTo(&myDevice, left, bottom);
 		OLED_FillRect(&myDevice, right, top);
 		OLED_DrawRect(&myDevice, right, top);
 		OLED_Update(&myDevice);
+   }
 
-
+   void update_asteroid() {
 		if (count == 5) {
 			left--;
 			right--;
-			if (left < 10) {
-				loc = (rand() % 16) + 6;
-				left = 100;
-				right = 110;
-				top = loc - 5;
-				bottom = loc + 5;
-			}
 			count = 0;
 		} else {
 			count++;
 		}
-
-
    }
 
-}
+   void asteroid_passed() {
+		if (left < 1) {
+			loc = (rand() % 21) + 4;
+			left = 118;
+			right = 125;
+			top = loc - 4;
+			bottom = loc + 3;
+			score++;
+		}
+	}
 
+	int game_over() {
+		if (contact()) {
+			xil_printf("Contact\r\n");
+			loc = (rand() % 21) + 4;
+			left = 118;
+			right = 125;
+			top = loc - 4;
+			bottom = loc + 3;
+			return 1;
+		}
+		return 0;
+	}
+
+	int parsed_input() {
+		// Capture state of each key
+		keystate = KYPD_getKeyStates(&myKYPD);
+
+		// Determine which single key is pressed, if any
+		status = KYPD_getKeyPressed(&myKYPD, keystate, &key);
+
+		int x = 0;
+		// Print key detect if a new key is pressed or if status has changed
+		if (status == KYPD_SINGLE_KEY && (status != last_status || key != last_key)) {
+			char c = (char) key;
+			x = (int) c;
+			last_key = key;
+		}
+		last_status = status;
+		return x;
+	}
+
+	void move() {
+		int x = parsed_input();
+		if (x == 65) {
+			 if (shipTop > 3) {
+				shipTop--;
+				shipBottom--;
+			 }
+		 } else if (x == 66) {
+			 if (shipBottom < 26) {
+				shipTop++;
+				shipBottom++;
+			 }
+		 }
+	}
+
+	char * toArray(int number) {
+	    int n = 0;
+	    int temp = number;
+	    while (temp != 0) {
+	    	temp /= 10;
+	    	n += 1;
+	    }
+	    char *numberArray = calloc(n, sizeof(char));
+	    if (n == 0) {
+	    	numberArray[0] = 0 + '0';
+	    } else {
+		    for (int i = n - 1; i >= 0; --i, number /= 10) {
+		        numberArray[i] = (number % 10) + '0';
+		    }
+	    }
+	    return numberArray;
+	}
+
+	void game() {
+		move();
+		draw_ready();
+		draw_ship();
+		draw_asteroid();
+		update_asteroid();
+		asteroid_passed();
+		if (game_over()) {
+			playing = 0;
+			for (int irow = 0; irow < OledRowMax; irow++) {
+				OLED_ClearBuffer(&myDevice);
+				OLED_SetCursor(&myDevice, 0, 0);
+				OLED_PutString(&myDevice, "Game Over");
+				OLED_SetCursor(&myDevice, 0, 2);
+				OLED_PutString(&myDevice, "Score: ");
+				OLED_SetCursor(&myDevice, 8, 2);
+				char* score_string = toArray(score);
+				OLED_PutString(&myDevice, score_string);
+
+				OLED_MoveTo(&myDevice, 0, irow);
+				OLED_FillRect(&myDevice, 127, 31);
+				OLED_MoveTo(&myDevice, 0, irow);
+				OLED_LineTo(&myDevice, 127, irow);
+				OLED_Update(&myDevice);
+			}
+			score = 0;
+			sleep(5);
+			for (int irow = 0; irow < OledRowMax; irow++) {
+				OLED_ClearBuffer(&myDevice);
+				OLED_SetCursor(&myDevice, 0, 0);
+				OLED_PutString(&myDevice, "Choose mode");
+				OLED_SetCursor(&myDevice, 0, 2);
+				OLED_PutString(&myDevice, "Easy: 1, Hard: 2");
+				OLED_Update(&myDevice);
+			}
+		}
+		usleep(1);
+	}
+
+	while (1) {
+		if (playing) {
+			game();
+		} else {
+			int x = parsed_input();
+			if (x == 49) {
+				playing = 1;
+			} else if (x == 50) {
+				playing = 1;
+			}
+			usleep(1000);
+		}
+	}
+
+}
 
 
 void DemoCleanup() {

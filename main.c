@@ -90,7 +90,7 @@ void DemoRun() {
 		int fitness;
 	} Ship;
 
-	int numShips = 100;
+	int numShips = 10;
 	int currentShip = 0;
 	int populationFitness;
 	float mutationRate = 0.1;
@@ -400,32 +400,55 @@ void DemoRun() {
 		}
 	}
 
-	void selection() {
+	void new_generation() {
 		tempPopulation = malloc(sizeof(Ship) * numShips);
 		int tempI = 0;
 		for (int z = 0; z < numShips; z++) {
-			int i = 0;
+			int i1 = 0;
 			float place = ((float)rand() / (float)(RAND_MAX));
 			while (place > 0) {
-				place -= ((float)(population[i].fitness) / (float)populationFitness);
-				i++;
+				place -= ((float)(population[i1].fitness) / (float)populationFitness);
+				i1++;
 			}
-			i--;
+			i1--;
+			int i2 = 0;
+			place = ((float)rand() / (float)(RAND_MAX));
+			while (place > 0) {
+				place -= ((float)(population[i2].fitness) / (float)populationFitness);
+				i2++;
+			}
+			i2--;
 			for (int j = 0; j < 5; j++) {
 				for (int k = 0; k < 3; k++) {
-					tempPopulation[tempI].w1[j][k] = population[i].w1[j][k];
+					if (((float)rand() / (float)(RAND_MAX)) < 0.5) {
+						tempPopulation[tempI].w1[j][k] = population[i1].w1[j][k];
+					} else {
+						tempPopulation[tempI].w1[j][k] = population[i2].w1[j][k];
+					}
 				}
 			}
 			for (int j = 0; j < 5; j++) {
-				tempPopulation[tempI].b1[j] = population[i].b1[j];
+				if (((float)rand() / (float)(RAND_MAX)) < 0.5) {
+					tempPopulation[tempI].b1[j] = population[i1].b1[j];
+				} else {
+					tempPopulation[tempI].b1[j] = population[i2].b1[j];
+				}
 			}
 			for (int j = 0; j < 2; j++) {
 				for (int k = 0; k < 5; k++) {
-					tempPopulation[tempI].w2[j][k] = population[i].w2[j][k];
+					if (((float)rand() / (float)(RAND_MAX)) < 0.5) {
+						tempPopulation[tempI].w2[j][k] = population[i1].w2[j][k];
+					} else {
+						tempPopulation[tempI].w2[j][k] = population[i2].w2[j][k];
+					}
 				}
 			}
 			for (int j = 0; j < 2; j++) {
-				tempPopulation[tempI].b2[j] = population[i].b2[j];
+				if (((float)rand() / (float)(RAND_MAX)) < 0.5) {
+					tempPopulation[tempI].b2[j] = population[i1].b2[j];
+				} else {
+					tempPopulation[tempI].b2[j] = population[i2].b2[j];
+				}
 			}
 			tempI++;
 		}
@@ -508,7 +531,7 @@ void DemoRun() {
 					populationFitness += population[i].fitness;
 				}
 				// selection
-				selection();
+				new_generation();
 				// mutation
 				mutate(mutationRate);
 				currentShip = 0;

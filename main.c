@@ -61,7 +61,7 @@ void DemoRun() {
 	Xil_Out32(myKYPD.GPIO_addr, 0xF);
 	Xil_Out32(myDevice.GPIO_addr, 0xAAAA);
 
-	int randomAsteroids = 1;
+	int randomAsteroids = 0;
 
 	top = 10;
 	right = 125;
@@ -74,7 +74,8 @@ void DemoRun() {
 	int shipLeft = 5;
 
 	int count = 0;
-	int mode = 1;
+	int decisionCount = 0;
+	int mode = 2;
 
 	int playing = 0;
 	int training = 0;
@@ -89,9 +90,10 @@ void DemoRun() {
 		int fitness;
 	} Ship;
 
-	int numShips = 20;
+	int numShips = 100;
 	int currentShip = 0;
 	int populationFitness;
+	float mutationRate = 0.1;
 	Ship *population;
 	Ship *tempPopulation;
 
@@ -155,7 +157,7 @@ void DemoRun() {
    }
 
    void update_asteroid() {
-		if (count == (10 / mode)) {
+		if (count >= (10 / mode)) {
 			left--;
 			right--;
 			count = 0;
@@ -278,8 +280,6 @@ void DemoRun() {
 		 }
 	}
 
-
-
 	void game() {
 		move();
 		draw_ready();
@@ -380,19 +380,24 @@ void DemoRun() {
 	}
 
 	void decision() {
-		int pos[3] = { shipTop, top, bottom };
-		int d = predict(currentShip, pos);
-		if (d == 0) {
-			 if (shipTop > 3) {
-				shipTop--;
-				shipBottom--;
+		if (decisionCount == 4) {
+			int pos[3] = { shipTop, top, bottom };
+			int d = predict(currentShip, pos);
+			if (d == 0) {
+				 if (shipTop > 3) {
+					shipTop--;
+					shipBottom--;
+				 }
+			 } else if (d == 1) {
+				 if (shipBottom < 26) {
+					shipTop++;
+					shipBottom++;
+				 }
 			 }
-		 } else if (d == 1) {
-			 if (shipBottom < 26) {
-				shipTop++;
-				shipBottom++;
-			 }
-		 }
+			decisionCount = 0;
+		} else {
+			decisionCount++;
+		}
 	}
 
 	void selection() {
@@ -446,8 +451,43 @@ void DemoRun() {
 		free(tempPopulation);
 	}
 
-	void mutate() {
-
+	void mutate(float rate) {
+		// mutate weights1
+		for (int i = 0; i < numShips; i++) {
+			for (int j = 0; j < 5; j++) {
+				for (int k = 0; k < 3; k++) {
+					if (((float)rand() / (float)(RAND_MAX)) < rate) {
+						population[i].w1[j][k] = ((float)rand() / (float)(RAND_MAX)) - 0.5;
+					}
+				}
+			}
+		}
+		// mutate biases1
+		for (int i = 0; i < numShips; i++) {
+			for (int j = 0; j < 5; j++) {
+				if (((float)rand() / (float)(RAND_MAX)) < rate) {
+					population[i].b1[j] = ((float)rand() / (float)(RAND_MAX)) - 0.5;
+				}
+			}
+		}
+		// mutate weights2
+		for (int i = 0; i < numShips; i++) {
+			for (int j = 0; j < 2; j++) {
+				for (int k = 0; k < 5; k++) {
+					if (((float)rand() / (float)(RAND_MAX)) < rate) {
+						population[i].w2[j][k] = ((float)rand() / (float)(RAND_MAX)) - 0.5;
+					}
+				}
+			}
+		}
+		// mutate biases2
+		for (int i = 0; i < numShips; i++) {
+			for (int j = 0; j < 2; j++) {
+				if (((float)rand() / (float)(RAND_MAX)) < rate) {
+					population[i].b2[j] = ((float)rand() / (float)(RAND_MAX)) - 0.5;
+				}
+			}
+		}
 	}
 
 	void train() {
@@ -461,7 +501,7 @@ void DemoRun() {
 			population[currentShip].fitness = score;
 			score = 0;
 			if (currentShip == numShips - 1) {
-				printf("currentShip: %d\n", currentShip);
+				xil_printf("new generation");
 				// calc population fitness
 				populationFitness = 0;
 				for (int i = 0; i < numShips; i++) {
@@ -470,27 +510,28 @@ void DemoRun() {
 				// selection
 				selection();
 				// mutation
-				mutate();
+				mutate(mutationRate);
 				currentShip = 0;
 			} else {
 				currentShip++;
 			}
 		}
 		usleep(1);
+		int x = parsed_input();
+		if (x == 48) {
+			training = 0;
+			free(population);
+			game_over_screen();
+			lobby();
+		}
 	}
 
-
-
-
-
 	/**************************************************************/
-
-
 
 	void check_lobby() {
 		int x = parsed_input();
 		if (x == 49 || x == 50) {
-			mode = x - 48;
+			mode = (x - 48) * 2;
 			playing = 1;
 		} else if (x == 67) {
 			mode = 10;

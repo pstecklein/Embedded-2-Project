@@ -8,79 +8,66 @@
 #include "xil_printf.h"
 #include "xparameters.h"
 
-
-void DemoInitialize();
-void DemoRun();
-void DemoCleanup();
-void DemoSleep(u32 millis);
-
+// for referencing Pmods throughout file
 PmodOLED myDevice;
 PmodKYPD myKYPD;
 
-
+/********************************* from digilent *********************************/
 // To change between PmodOLED and OnBoardOLED is to change Orientation
 const u8 orientation = 0x0; // Set up for Normal PmodOLED(false) vs normal
                             // Onboard OLED(true)
 const u8 invert = 0x0; // true = whitebackground/black letters
                        // false = black background /white letters
 
+/*********************************************************************************/
 
-int main(void) {
-   DemoInitialize();
-   DemoRun();
-   DemoCleanup();
-   return 0;
-}
-
-// keytable is determined as follows (indices shown in Keypad position below)
-// 12 13 14 15
-// 8  9  10 11
-// 4  5  6  7
-// 0  1  2  3
+// KYPD specs
 #define DEFAULT_KEYTABLE "0FED789C456B123A"
-
-void DemoInitialize() {
+// initialize the Pmods
+void init() {
    KYPD_begin(&myKYPD, XPAR_PMODKYPD_0_AXI_LITE_GPIO_BASEADDR);
    KYPD_loadKeyTable(&myKYPD, (u8*) DEFAULT_KEYTABLE);
    OLED_Begin(&myDevice, XPAR_PMODOLED_0_AXI_LITE_GPIO_BASEADDR,
            XPAR_PMODOLED_0_AXI_LITE_SPI_BASEADDR, orientation, invert);
 }
+// use OLED lib for device cleanup
+void cleanup() {
+	OLED_End(&myDevice);
+}
 
-
-void DemoRun() {
+// run the game, called in main
+void run() {
 	// KYPD
 	u16 keystate;
 	XStatus status, last_status = KYPD_NO_KEY;
 	u8 key, last_key = 'x';
-	// Initial value of last_key cannot be contained in loaded KEYTABLE string
 
-	// OLED
-	int top, right, bottom, left, loc;
+	// Pmod config
 	u8 *pat;
-
 	Xil_Out32(myKYPD.GPIO_addr, 0xF);
 	Xil_Out32(myDevice.GPIO_addr, 0xAAAA);
 
-	int randomAsteroids = 0;
-
+	// location constants
+	int top, right, bottom, left, loc;
 	top = 10;
 	right = 125;
 	bottom = 17;
 	left = 118;
-
 	int shipTop = 11;
 	int shipRight = 10;
 	int shipBottom = 16;
 	int shipLeft = 5;
 
+	// game constants
+	int randomAsteroids = 0;
 	int count = 0;
 	int decisionCount = 0;
 	int mode = 2;
-
 	int playing = 0;
 	int training = 0;
 	int score = 0;
 
+	// struct for the spaceship bots
 	typedef struct
 	{
 		float w1[5][3];
@@ -90,6 +77,7 @@ void DemoRun() {
 		int fitness;
 	} Ship;
 
+	// constants for neuro population
 	int numShips = 10;
 	int currentShip = 0;
 	int populationFitness;
@@ -97,16 +85,17 @@ void DemoRun() {
 	Ship *population;
 	Ship *tempPopulation;
 
+	// check if asteroid hit the spaceship
    int contact() {
 	   if (left < shipRight + 6) {
 		  if ((top > shipTop - 8) && (top < shipBottom + 1)) {
 			  return 1;
 		  }
 	   }
-
 	   return 0;
    }
 
+   // enable oled environment
    void draw_ready() {
 	   // Choosing Fill pattern 0
 		pat = OLED_GetStdPattern(0);
@@ -118,6 +107,7 @@ void DemoRun() {
 		OLED_ClearBuffer(&myDevice);
    }
 
+   // render spaceship on screen
    void draw_ship() {
 	   pat = OLED_GetStdPattern(1);
 		OLED_SetFillPattern(&myDevice, pat);
@@ -147,6 +137,7 @@ void DemoRun() {
 		OLED_DrawRect(&myDevice, shipRight + 5, shipTop + 2);
    }
 
+   // render asteroid on screen
    void draw_asteroid() {
 		pat = OLED_GetStdPattern(7);
 		OLED_SetFillPattern(&myDevice, pat);
@@ -156,6 +147,7 @@ void DemoRun() {
 		OLED_Update(&myDevice);
    }
 
+   // update asteroids position on oled
    void update_asteroid() {
 		if (count >= (10 / mode)) {
 			left--;
@@ -166,6 +158,7 @@ void DemoRun() {
 		}
    }
 
+   // check if asteroid is off screen, if so, generate new asteroid
    void asteroid_passed() {
 		if (left < 1) {
 			if (randomAsteroids) {
@@ -184,6 +177,7 @@ void DemoRun() {
 		}
 	}
 
+   // check if game is over
 	int game_over() {
 		if (contact()) {
 			loc = (rand() % 21) + 4;
@@ -196,6 +190,7 @@ void DemoRun() {
 		return 0;
 	}
 
+	// show options in lobby - hide secret mode
 	void lobby() {
 		score = 0;
 		draw_ready();
@@ -209,24 +204,26 @@ void DemoRun() {
 		}
 	}
 
-	char * toArray(int number) {
+	// Method to convert score to string
+	char * scoreString(int num) {
 		int n = 0;
-		int temp = number;
+		int temp = num;
 		while (temp != 0) {
 			temp /= 10;
 			n += 1;
 		}
-		char *numberArray = calloc(n, sizeof(char));
+		char *res = calloc(n, sizeof(char));
 		if (n == 0) {
-			numberArray[0] = 0 + '0';
+			res[0] = 0 + '0';
 		} else {
-			for (int i = n - 1; i >= 0; --i, number /= 10) {
-				numberArray[i] = (number % 10) + '0';
+			for (int i = n - 1; i >= 0; --i, num /= 10) {
+				res[i] = (num % 10) + '0';
 			}
 		}
-		return numberArray;
+		return res;
 	}
 
+	// When game over, display score
 	void game_over_screen() {
 		for (int irow = 0; irow < OledRowMax; irow++) {
 			OLED_ClearBuffer(&myDevice);
@@ -235,7 +232,7 @@ void DemoRun() {
 			OLED_SetCursor(&myDevice, 0, 2);
 			OLED_PutString(&myDevice, "Score: ");
 			OLED_SetCursor(&myDevice, 8, 2);
-			char* score_string = toArray(score);
+			char* score_string = scoreString(score);
 			OLED_PutString(&myDevice, score_string);
 
 			OLED_MoveTo(&myDevice, 0, irow);
@@ -247,6 +244,7 @@ void DemoRun() {
 		sleep(5);
 	}
 
+	// modularize parsing KYPD input
 	int parsed_input() {
 		// Capture state of each key
 		keystate = KYPD_getKeyStates(&myKYPD);
@@ -265,6 +263,7 @@ void DemoRun() {
 		return x;
 	}
 
+	// render players move
 	void move() {
 		int x = parsed_input();
 		if (x == 65) {
@@ -280,6 +279,7 @@ void DemoRun() {
 		 }
 	}
 
+	// workflow for player game mode
 	void game() {
 		move();
 		draw_ready();
@@ -295,9 +295,9 @@ void DemoRun() {
 		usleep(1);
 	}
 
-
 	/******************** Genetic Algorithm ***********************/
 
+	// initialize neural network weights and biases of population
 	void init_population() {
 		// New population of ships
 		population = malloc(sizeof(Ship) * numShips);
@@ -335,6 +335,7 @@ void DemoRun() {
 		}
 	}
 
+	// reLU activation function
 	float relu(float z) {
 		if (z > 0) {
 			return z;
@@ -343,12 +344,14 @@ void DemoRun() {
 		}
 	}
 
+	// simplified softmax activation function
 	float softmax(int i, float z[2]) {
 		// float total = (float)(exp(z[0]) + exp(z[1]));
 		// return exp(z[i]) / total;
 		return z[i];
 	}
 
+	// use neural net for prediction
 	int predict(int s, int data[3]) {
 		float z1[5];
 		float a1[5];
@@ -379,6 +382,7 @@ void DemoRun() {
 		}
 	}
 
+	// act on the prediction
 	void decision() {
 		if (decisionCount == 4) {
 			int pos[3] = { shipTop, top, bottom };
@@ -400,6 +404,7 @@ void DemoRun() {
 		}
 	}
 
+	// selection, reproduction - genetic algorithm
 	void new_generation() {
 		tempPopulation = malloc(sizeof(Ship) * numShips);
 		int tempI = 0;
@@ -474,6 +479,7 @@ void DemoRun() {
 		free(tempPopulation);
 	}
 
+	// mutate weights - genetic algorithm
 	void mutate(float rate) {
 		// mutate weights1
 		for (int i = 0; i < numShips; i++) {
@@ -513,6 +519,7 @@ void DemoRun() {
 		}
 	}
 
+	// workflow for train mode
 	void train() {
 		decision();
 		draw_ready();
@@ -551,6 +558,7 @@ void DemoRun() {
 
 	/**************************************************************/
 
+	// wait for selection of game mode
 	void check_lobby() {
 		int x = parsed_input();
 		if (x == 49 || x == 50) {
@@ -564,7 +572,10 @@ void DemoRun() {
 		usleep(1000);
 	}
 
+	// start in lobby
 	lobby();
+
+	// active game
 	while (1) {
 		if (playing) {
 			game();
@@ -577,7 +588,10 @@ void DemoRun() {
 
 }
 
-void DemoCleanup() {
-	OLED_End(&myDevice);
-}
+int main(void) {
+   init();
+   run();
+   cleanup();
 
+   return 0;
+}

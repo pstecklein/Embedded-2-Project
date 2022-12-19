@@ -41,15 +41,12 @@
 #include "xparameters.h"
 
 
-PmodOLED myDevice;
-
 void DemoInitialize();
 void DemoRun();
 void DemoCleanup();
-void DisableCaches();
-void EnableCaches();
 void DemoSleep(u32 millis);
 
+PmodOLED myDevice;
 PmodKYPD myKYPD;
 
 
@@ -75,7 +72,6 @@ int main(void) {
 #define DEFAULT_KEYTABLE "0FED789C456B123A"
 
 void DemoInitialize() {
-   EnableCaches();
    KYPD_begin(&myKYPD, XPAR_PMODKYPD_0_AXI_LITE_GPIO_BASEADDR);
    KYPD_loadKeyTable(&myKYPD, (u8*) DEFAULT_KEYTABLE);
    OLED_Begin(&myDevice, XPAR_PMODOLED_0_AXI_LITE_GPIO_BASEADDR,
@@ -108,8 +104,9 @@ void DemoRun() {
 	int shipLeft = 5;
 
 	int count = 0;
+	int mode = 1;
 
-	int playing = 1;
+	int playing = 0;
 	int score = 0;
 
    int contact() {
@@ -172,7 +169,7 @@ void DemoRun() {
    }
 
    void update_asteroid() {
-		if (count == 5) {
+		if (count == (10 / mode)) {
 			left--;
 			right--;
 			count = 0;
@@ -203,6 +200,57 @@ void DemoRun() {
 			return 1;
 		}
 		return 0;
+	}
+
+	void lobby() {
+		score = 0;
+		draw_ready();
+		for (int irow = 0; irow < OledRowMax; irow++) {
+			OLED_ClearBuffer(&myDevice);
+			OLED_SetCursor(&myDevice, 0, 0);
+			OLED_PutString(&myDevice, "Choose mode");
+			OLED_SetCursor(&myDevice, 0, 2);
+			OLED_PutString(&myDevice, "Easy: 1, Hard: 2");
+			OLED_Update(&myDevice);
+		}
+	}
+
+	char * toArray(int number) {
+		int n = 0;
+		int temp = number;
+		while (temp != 0) {
+			temp /= 10;
+			n += 1;
+		}
+		char *numberArray = calloc(n, sizeof(char));
+		if (n == 0) {
+			numberArray[0] = 0 + '0';
+		} else {
+			for (int i = n - 1; i >= 0; --i, number /= 10) {
+				numberArray[i] = (number % 10) + '0';
+			}
+		}
+		return numberArray;
+	}
+
+	void game_over_screen() {
+		for (int irow = 0; irow < OledRowMax; irow++) {
+			OLED_ClearBuffer(&myDevice);
+			OLED_SetCursor(&myDevice, 0, 0);
+			OLED_PutString(&myDevice, "Game Over");
+			OLED_SetCursor(&myDevice, 0, 2);
+			OLED_PutString(&myDevice, "Score: ");
+			OLED_SetCursor(&myDevice, 8, 2);
+			char* score_string = toArray(score);
+			OLED_PutString(&myDevice, score_string);
+
+			OLED_MoveTo(&myDevice, 0, irow);
+			OLED_FillRect(&myDevice, 127, 31);
+			OLED_MoveTo(&myDevice, 0, irow);
+			OLED_LineTo(&myDevice, 127, irow);
+			OLED_Update(&myDevice);
+		}
+		sleep(5);
 	}
 
 	int parsed_input() {
@@ -238,23 +286,6 @@ void DemoRun() {
 		 }
 	}
 
-	char * toArray(int number) {
-	    int n = 0;
-	    int temp = number;
-	    while (temp != 0) {
-	    	temp /= 10;
-	    	n += 1;
-	    }
-	    char *numberArray = calloc(n, sizeof(char));
-	    if (n == 0) {
-	    	numberArray[0] = 0 + '0';
-	    } else {
-		    for (int i = n - 1; i >= 0; --i, number /= 10) {
-		        numberArray[i] = (number % 10) + '0';
-		    }
-	    }
-	    return numberArray;
-	}
 
 	void game() {
 		move();
@@ -265,47 +296,27 @@ void DemoRun() {
 		asteroid_passed();
 		if (game_over()) {
 			playing = 0;
-			for (int irow = 0; irow < OledRowMax; irow++) {
-				OLED_ClearBuffer(&myDevice);
-				OLED_SetCursor(&myDevice, 0, 0);
-				OLED_PutString(&myDevice, "Game Over");
-				OLED_SetCursor(&myDevice, 0, 2);
-				OLED_PutString(&myDevice, "Score: ");
-				OLED_SetCursor(&myDevice, 8, 2);
-				char* score_string = toArray(score);
-				OLED_PutString(&myDevice, score_string);
-
-				OLED_MoveTo(&myDevice, 0, irow);
-				OLED_FillRect(&myDevice, 127, 31);
-				OLED_MoveTo(&myDevice, 0, irow);
-				OLED_LineTo(&myDevice, 127, irow);
-				OLED_Update(&myDevice);
-			}
-			score = 0;
-			sleep(5);
-			for (int irow = 0; irow < OledRowMax; irow++) {
-				OLED_ClearBuffer(&myDevice);
-				OLED_SetCursor(&myDevice, 0, 0);
-				OLED_PutString(&myDevice, "Choose mode");
-				OLED_SetCursor(&myDevice, 0, 2);
-				OLED_PutString(&myDevice, "Easy: 1, Hard: 2");
-				OLED_Update(&myDevice);
-			}
+			game_over_screen();
+			lobby();
 		}
 		usleep(1);
 	}
 
+	void check_lobby() {
+		int x = parsed_input();
+		if (x == 49 || x == 50) {
+			mode = x - 48;
+			playing = 1;
+		}
+		usleep(1000);
+	}
+
+	lobby();
 	while (1) {
 		if (playing) {
 			game();
 		} else {
-			int x = parsed_input();
-			if (x == 49) {
-				playing = 1;
-			} else if (x == 50) {
-				playing = 1;
-			}
-			usleep(1000);
+			check_lobby();
 		}
 	}
 
@@ -314,27 +325,5 @@ void DemoRun() {
 
 void DemoCleanup() {
 	OLED_End(&myDevice);
-	DisableCaches();
 }
 
-void EnableCaches() {
-#ifdef __MICROBLAZE__
-#ifdef XPAR_MICROBLAZE_USE_ICACHE
-   Xil_ICacheEnable();
-#endif
-#ifdef XPAR_MICROBLAZE_USE_DCACHE
-   Xil_DCacheEnable();
-#endif
-#endif
-}
-
-void DisableCaches() {
-#ifdef __MICROBLAZE__
-#ifdef XPAR_MICROBLAZE_USE_DCACHE
-   Xil_DCacheDisable();
-#endif
-#ifdef XPAR_MICROBLAZE_USE_ICACHE
-   Xil_ICacheDisable();
-#endif
-#endif
-}

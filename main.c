@@ -1,35 +1,3 @@
-/******************************************************************************/
-/*                                                                            */
-/* PmodKYPD.c -- Demo for the use of the Pmod Keypad IP core                  */
-/*                                                                            */
-/******************************************************************************/
-/* Author:   Mikel Skreen                                                     */
-/* Copyright 2016, Digilent Inc.                                              */
-/******************************************************************************/
-/* File Description:                                                          */
-/*                                                                            */
-/* This demo continuously captures keypad data and prints a message to an     */
-/* attached serial terminal whenever a positive edge is detected on any of    */
-/* the sixteen keys. In order to receive messages, a serial terminal          */
-/* application on your PC should be connected to the appropriate COM port for */
-/* the micro-USB cable connection to your board's USBUART port. The terminal  */
-/* should be configured with 8-bit data, no parity bit, 1 stop bit, and the   */
-/* the appropriate Baud rate for your application. If you are using a Zynq    */
-/* board, use a baud rate of 115200, if you are using a MicroBlaze system,    */
-/* use the Baud rate specified in the AXI UARTLITE IP, typically 115200 or    */
-/* 9600 Baud.                                                                 */
-/*                                                                            */
-/******************************************************************************/
-/* Revision History:                                                          */
-/*                                                                            */
-/*    06/08/2016(MikelS):   Created                                           */
-/*    08/17/2017(artvvb):   Validated for Vivado 2015.4                       */
-/*    08/30/2017(artvvb):   Validated for Vivado 2016.4                       */
-/*                          Added Multiple keypress error detection           */
-/*    01/27/2018(atangzwj): Validated for Vivado 2017.4                       */
-/*                                                                            */
-/******************************************************************************/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -286,7 +254,6 @@ void DemoRun() {
 		 }
 	}
 
-
 	void game() {
 		move();
 		draw_ready();
@@ -321,7 +288,6 @@ void DemoRun() {
 	}
 
 }
-
 
 void DemoCleanup() {
 	OLED_End(&myDevice);

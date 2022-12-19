@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
+#include <math.h>
 #include "PmodOLED.h"
 #include "PmodKYPD.h"
 #include "sleep.h"
@@ -61,21 +61,39 @@ void DemoRun() {
 	Xil_Out32(myKYPD.GPIO_addr, 0xF);
 	Xil_Out32(myDevice.GPIO_addr, 0xAAAA);
 
+	int randomAsteroids = 1;
+
 	top = 10;
 	right = 125;
 	bottom = 17;
 	left = 118;
 
-	int shipTop = 5;
+	int shipTop = 11;
 	int shipRight = 10;
-	int shipBottom = 10;
+	int shipBottom = 16;
 	int shipLeft = 5;
 
 	int count = 0;
 	int mode = 1;
 
 	int playing = 0;
+	int training = 0;
 	int score = 0;
+
+	typedef struct
+	{
+		float w1[5][3];
+		float b1[5];
+		float w2[2][5];
+		float b2[2];
+		int fitness;
+	} Ship;
+
+	int numShips = 20;
+	int currentShip = 0;
+	int populationFitness;
+	Ship *population;
+	Ship *tempPopulation;
 
    int contact() {
 	   if (left < shipRight + 6) {
@@ -148,18 +166,24 @@ void DemoRun() {
 
    void asteroid_passed() {
 		if (left < 1) {
-			loc = (rand() % 21) + 4;
-			left = 118;
-			right = 125;
-			top = loc - 4;
-			bottom = loc + 3;
+			if (randomAsteroids) {
+				loc = (rand() % 21) + 4;
+				left = 118;
+				right = 125;
+				top = loc - 4;
+				bottom = loc + 3;
+			} else {
+				left = 118;
+				right = 125;
+				top = shipTop - 1;
+				bottom = shipBottom + 1;
+			}
 			score++;
 		}
 	}
 
 	int game_over() {
 		if (contact()) {
-			xil_printf("Contact\r\n");
 			loc = (rand() % 21) + 4;
 			left = 118;
 			right = 125;
@@ -254,6 +278,8 @@ void DemoRun() {
 		 }
 	}
 
+
+
 	void game() {
 		move();
 		draw_ready();
@@ -269,11 +295,207 @@ void DemoRun() {
 		usleep(1);
 	}
 
+
+	/******************** Genetic Algorithm ***********************/
+
+	void init_population() {
+		// New population of ships
+		population = malloc(sizeof(Ship) * numShips);
+		currentShip = 0;
+		// init weights1
+		for (int i = 0; i < numShips; i++) {
+			for (int j = 0; j < 5; j++) {
+				for (int k = 0; k < 3; k++) {
+					population[i].w1[j][k] = ((float)rand() / (float)(RAND_MAX)) - 0.5;
+				}
+			}
+		}
+		// init biases1
+		for (int i = 0; i < numShips; i++) {
+			for (int j = 0; j < 5; j++) {
+				population[i].b1[j] = ((float)rand() / (float)(RAND_MAX)) - 0.5;
+			}
+		}
+		// init weights2
+		for (int i = 0; i < numShips; i++) {
+			for (int j = 0; j < 2; j++) {
+				for (int k = 0; k < 5; k++) {
+					population[i].w2[j][k] = ((float)rand() / (float)(RAND_MAX)) - 0.5;
+				}
+			}
+		}
+		// init biases2
+		for (int i = 0; i < numShips; i++) {
+			for (int j = 0; j < 2; j++) {
+				population[i].b2[j] = ((float)rand() / (float)(RAND_MAX)) - 0.5;
+			}
+		}
+		for (int i = 0; i < numShips; i++) {
+			population[i].fitness = 0;
+		}
+	}
+
+	float relu(float z) {
+		if (z > 0) {
+			return z;
+		} else {
+			return 0;
+		}
+	}
+
+	float softmax(int i, float z[2]) {
+		// float total = (float)(exp(z[0]) + exp(z[1]));
+		// return exp(z[i]) / total;
+		return z[i];
+	}
+
+	int predict(int s, int data[3]) {
+		float z1[5];
+		float a1[5];
+		float z2[2];
+		float a2[2];
+
+		for (int i = 0; i < 5; i++) {
+			z1[i] = population[s].b1[i];
+			for (int j = 0; j < 3; j++) {
+				z1[i] += population[s].w1[i][j] * (float)data[j];
+			}
+		}
+		for (int i = 0; i < 5; i++) {
+			a1[i] = relu(z1[i]);
+		}
+		for (int i = 0; i < 2; i++) {
+			z2[i] = population[s].b2[i];
+			for (int j = 0; j < 5; j++) {
+				z2[i] += population[s].w2[i][j] * (float)a1[j];
+			}
+		}
+		a2[0] = softmax(0, z2);
+		a2[1] = softmax(1, z2);
+		if (a2[0] > a2[1]) {
+			return 0;
+		} else {
+			return 1;
+		}
+	}
+
+	void decision() {
+		int pos[3] = { shipTop, top, bottom };
+		int d = predict(currentShip, pos);
+		if (d == 0) {
+			 if (shipTop > 3) {
+				shipTop--;
+				shipBottom--;
+			 }
+		 } else if (d == 1) {
+			 if (shipBottom < 26) {
+				shipTop++;
+				shipBottom++;
+			 }
+		 }
+	}
+
+	void selection() {
+		tempPopulation = malloc(sizeof(Ship) * numShips);
+		int tempI = 0;
+		for (int z = 0; z < numShips; z++) {
+			int i = 0;
+			float place = ((float)rand() / (float)(RAND_MAX));
+			while (place > 0) {
+				place -= ((float)(population[i].fitness) / (float)populationFitness);
+				i++;
+			}
+			i--;
+			for (int j = 0; j < 5; j++) {
+				for (int k = 0; k < 3; k++) {
+					tempPopulation[tempI].w1[j][k] = population[i].w1[j][k];
+				}
+			}
+			for (int j = 0; j < 5; j++) {
+				tempPopulation[tempI].b1[j] = population[i].b1[j];
+			}
+			for (int j = 0; j < 2; j++) {
+				for (int k = 0; k < 5; k++) {
+					tempPopulation[tempI].w2[j][k] = population[i].w2[j][k];
+				}
+			}
+			for (int j = 0; j < 2; j++) {
+				tempPopulation[tempI].b2[j] = population[i].b2[j];
+			}
+			tempI++;
+		}
+		for (int i = 0; i < numShips; i++) {
+			for (int j = 0; j < 5; j++) {
+				for (int k = 0; k < 3; k++) {
+					population[i].w1[j][k] = tempPopulation[i].w1[j][k];
+				}
+			}
+			for (int j = 0; j < 5; j++) {
+				population[i].b1[j] = tempPopulation[i].b1[j];
+			}
+			for (int j = 0; j < 2; j++) {
+				for (int k = 0; k < 5; k++) {
+					population[i].w2[j][k] = tempPopulation[i].w2[j][k];
+				}
+			}
+			for (int j = 0; j < 2; j++) {
+				population[i].b2[j] = tempPopulation[i].b2[j];
+			}
+			population[i].fitness = 0;
+		}
+		free(tempPopulation);
+	}
+
+	void mutate() {
+
+	}
+
+	void train() {
+		decision();
+		draw_ready();
+		draw_ship();
+		draw_asteroid();
+		update_asteroid();
+		asteroid_passed();
+		if (game_over()) {
+			population[currentShip].fitness = score;
+			score = 0;
+			if (currentShip == numShips - 1) {
+				printf("currentShip: %d\n", currentShip);
+				// calc population fitness
+				populationFitness = 0;
+				for (int i = 0; i < numShips; i++) {
+					populationFitness += population[i].fitness;
+				}
+				// selection
+				selection();
+				// mutation
+				mutate();
+				currentShip = 0;
+			} else {
+				currentShip++;
+			}
+		}
+		usleep(1);
+	}
+
+
+
+
+
+	/**************************************************************/
+
+
+
 	void check_lobby() {
 		int x = parsed_input();
 		if (x == 49 || x == 50) {
 			mode = x - 48;
 			playing = 1;
+		} else if (x == 67) {
+			mode = 10;
+			training = 1;
+			init_population();
 		}
 		usleep(1000);
 	}
@@ -282,6 +504,8 @@ void DemoRun() {
 	while (1) {
 		if (playing) {
 			game();
+		} else if (training) {
+			train();
 		} else {
 			check_lobby();
 		}

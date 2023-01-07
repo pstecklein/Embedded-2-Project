@@ -1,4 +1,4 @@
-# embedded2
+# Space evade game on FPGA
 
 This is the works of my project in embedded systems 2.
 
